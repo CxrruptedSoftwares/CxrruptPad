@@ -1,59 +1,122 @@
 # CxrruptPad - Modern Audio Soundboard
 
-A sleek, feature-rich audio soundboard application built with PyQt6 and pygame. Perfect for streamers, content creators, or anyone who needs quick access to sound effects.
+<div align="center">
+  <img src="https://i.imgur.com/GWY0My5.png" alt="CxrruptPad Screenshot" width="800"/>
+  <p><i>A sleek, feature-rich audio soundboard application built with PyQt6 and pygame</i></p>
+  <p>
+    <a href="#features">Features</a> •
+    <a href="#installation">Installation</a> •
+    <a href="#usage">Usage</a> •
+    <a href="#system-requirements">Requirements</a> •
+    <a href="#contributing">Contributing</a>
+  </p>
+</div>
 
-![CxrruptPad Screenshot](https://i.imgur.com/GWY0My5.png)
+## 🎵 Features
 
-## Features
+- **Organized Sound Management**
+  - Arrange sounds into tabbed categories
+  - Effortless drag-and-drop interface
+  - Favorite sounds for quick access
 
-- 🎵 Organize sounds into tabbed categories
-- 🌈 Modern, stylish UI with glow effects
-- 🎚️ Edit sounds (trim, change volume, adjust speed)
-- 🎛️ Built-in recording functionality
-- ⬇️ Download sounds directly from YouTube
-- ⭐ Favorite sounds for quick access
-- ⌨️ Keyboard shortcuts for rapid triggering
-- 🌗 Cross-platform support (Windows and Linux)
-- 🔄 Automatic dependency management
+- **Modern, Professional UI**
+  - Sleek dark theme with customizable accents
+  - Responsive grid and list view modes
+  - Animated transitions and glow effects
 
-## Installation
+- **Advanced Audio Controls**
+  - Edit sounds (trim, change volume, adjust speed)
+  - Master volume slider with visual feedback
+  - Stop all sounds with a single keystroke
 
-### Cloning Github: Clone the Repository and Install Dependencies
+- **Integrated Creation Tools**
+  - Built-in recording functionality
+  - Download sounds directly from YouTube
+  - Convert various audio formats automatically
 
-```bash
-# Clone the repository
-git clone https://github.com/CxrruptedSoftwares/CxrruptPad.git
-cd CxrruptPad
+- **Productivity Features**
+  - Keyboard shortcuts for rapid triggering
+  - Customizable hotkeys for any sound
+  - Search functionality for quick access
 
-# Create a virtual environment (recommended)
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+- **Cross-Platform Support**
+  - Works on Windows and Linux
+  - Automatic dependency management
+  - Consistent experience across platforms
 
-# Install dependencies
-pip install -r requirements.txt
-```
+## 🚀 Installation
+
+### Windows
+
+1. **Automatic Installation**
+   ```
+   # Download and run the installer
+   install.bat
+   ```
+
+2. **Manual Installation**
+   ```
+   # Clone the repository
+   git clone https://github.com/CxrruptedSoftwares/CxrruptPad.git
+   cd CxrruptPad
+
+   # Create a virtual environment
+   python -m venv venv
+   venv\Scripts\activate
+
+   # Install dependencies
+   pip install -r requirements.txt
+   ```
+
+### Linux
+
+1. **Automatic Installation**
+   ```bash
+   # Download and run the installer
+   chmod +x install.sh
+   ./install.sh
+   ```
+
+2. **Manual Installation**
+   ```bash
+   # Clone the repository
+   git clone https://github.com/CxrruptedSoftwares/CxrruptPad.git
+   cd CxrruptPad
+
+   # Create a virtual environment
+   python -m venv venv
+   source venv/bin/activate
+
+   # Install dependencies
+   pip install -r requirements.txt
+   ```
 
 ### Running the Application
 
 ```bash
-python main.py
+# On Windows
+run_cxrruptpad.bat
+
+# On Linux
+./run_cxrruptpad.sh
 ```
 
-## System Requirements
+## 💻 System Requirements
 
-- Python 3.8 or higher
-- Windows 10/11 or Linux
-- FFmpeg (for recording and audio processing)
-- Additional dependencies listed in requirements.txt
+- **Python**: 3.8 or higher
+- **Operating System**: Windows 10/11 or Linux
+- **External Dependencies**: FFmpeg (for recording and audio processing)
+- **Storage**: ~100MB for the application and dependencies
+- **Memory**: Minimum 2GB RAM (4GB+ recommended)
 
-## Automatic Dependency Installation
+### Automatic Dependency Installation
 
-On first launch, CxrruptPad will check if you have all the required external dependencies (like FFmpeg) installed on your system. If any are missing, it will offer to install them automatically:
+On first launch, CxrruptPad will automatically check for and offer to install required external dependencies:
 
-- On Windows: Using winget or chocolatey
-- On Linux: Using your system's package manager (apt, dnf, pacman, etc.)
+- **Windows**: Using winget or chocolatey
+- **Linux**: Using your system's package manager (apt, dnf, pacman, etc.)
 
-## Usage
+## 📋 Usage
 
 ### Managing Tabs and Sounds
 
@@ -75,10 +138,16 @@ On first launch, CxrruptPad will check if you have all the required external dep
 - Adjust volume with the slider at the bottom of the window
 - Right-click sounds to add favorites or assign custom hotkeys
 
-## Contributing
+## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-## License
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📜 License
 
 This project is licensed under the MIT License - see the LICENSE file for details. 
