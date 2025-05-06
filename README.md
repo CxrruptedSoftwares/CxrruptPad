@@ -18,12 +18,12 @@ A sleek, feature-rich audio soundboard application built with PyQt6 and pygame. 
 
 ## Installation
 
-### Option 1: Clone the Repository and Install Dependencies
+### Cloning Github: Clone the Repository and Install Dependencies
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/CxrruptSoundpad.git
-cd CxrruptSoundpad
+git clone https://github.com/CxrruptedSoftwares/CxrruptPad.git
+cd CxrruptPad
 
 # Create a virtual environment (recommended)
 python -m venv venv
@@ -31,12 +31,6 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
-```
-
-### Option 2: Install from PyPI (if available)
-
-```bash
-pip install cxrruptpad
 ```
 
 ### Running the Application
