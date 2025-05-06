@@ -2,7 +2,7 @@
 
 A sleek, feature-rich audio soundboard application built with PyQt6 and pygame. Perfect for streamers, content creators, or anyone who needs quick access to sound effects.
 
-![CxrruptPad Screenshot](https://i.imgur.com/YourScreenshotHere.png)
+![CxrruptPad Screenshot](https://i.imgur.com/GWY0My5.png)
 
 ## Features
 
