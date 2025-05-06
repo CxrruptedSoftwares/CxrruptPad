@@ -18,9 +18,22 @@ def get_sounds_dir():
     sounds_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "sounds")
     return ensure_dir_exists(sounds_dir)
 
-def get_tab_dir(tab_name):
-    """Get the directory for a specific tab's sounds."""
-    tab_dir = os.path.join(get_sounds_dir(), tab_name)
+def get_tab_dir(tab_name=None):
+    """
+    Get the directory for tabs or a specific tab's sounds.
+    
+    If tab_name is provided, returns the path to that specific tab's directory.
+    If tab_name is None, returns the main tabs directory.
+    """
+    # Get the main sounds directory
+    sounds_dir = get_sounds_dir()
+    
+    # If no tab name is provided, return the main sounds directory
+    if tab_name is None:
+        return sounds_dir
+    
+    # Otherwise, return the specific tab directory
+    tab_dir = os.path.join(sounds_dir, tab_name)
     return ensure_dir_exists(tab_dir)
 
 def save_json(file_path, data):
@@ -63,8 +76,15 @@ def delete_file_safely(file_path):
             return False
     return False
 
-def move_file_safely(src_path, dst_path):
-    """Safely move a file, creating any necessary directories."""
+def move_file_safely(src_path, dst_path, copy=False):
+    """
+    Safely move or copy a file, creating any necessary directories.
+    
+    Args:
+        src_path: Source file path
+        dst_path: Destination file path
+        copy: If True, copy the file instead of moving it
+    """
     if not os.path.exists(src_path):
         return False
     
@@ -73,7 +93,10 @@ def move_file_safely(src_path, dst_path):
         os.makedirs(dst_dir, exist_ok=True)
     
     try:
-        shutil.move(src_path, dst_path)
+        if copy:
+            shutil.copy2(src_path, dst_path)
+        else:
+            shutil.move(src_path, dst_path)
         return True
-    except:
+    except Exception:
         return False 

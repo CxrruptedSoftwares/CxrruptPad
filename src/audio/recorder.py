@@ -9,7 +9,7 @@ import random
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QProgressBar, QSizePolicy,
-    QSlider, QMessageBox, QFileDialog, QLineEdit
+    QSlider, QMessageBox, QFileDialog, QLineEdit, QInputDialog
 )
 from PyQt6.QtGui import QIcon, QColor, QFont
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QThread
@@ -17,6 +17,7 @@ from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QThread
 from src.constants import APP_STYLE
 from src.ui.components import WaveformVisualizer
 from src.audio.audio_utils import get_default_audio_device
+from src.utils.logger import logger
 
 class RecordingThread(QThread):
     status_signal = pyqtSignal(str)
@@ -42,6 +43,7 @@ class RecordingThread(QThread):
             temp_name = f"recording_{int(time.time())}_{random.randint(1000, 9999)}.wav"
             self.temp_file = os.path.join(temp_dir, temp_name)
             
+            logger.info(f"Starting audio recording to {self.temp_file}")
             self.status_signal.emit("Starting recording...")
             
             # Set up recording command based on platform
@@ -142,11 +144,13 @@ class RecordingThread(QThread):
                 self.error_signal.emit("Recording file not found")
         
         except Exception as e:
+            logger.error(f"Recording error: {str(e)}", exc_info=True)
             self.error_signal.emit(f"Recording error: {str(e)}")
     
     def stop_recording(self):
         self.stop_flag = True
         if self.process and self.process.poll() is None:
+            logger.debug("Stopping recording process")
             # Try to gracefully stop FFmpeg
             if platform.system() == "Windows":
                 # Windows needs to use taskkill
@@ -159,6 +163,7 @@ class RecordingThread(QThread):
                 # Force kill if still running
                 if self.process.poll() is None:
                     self.process.kill()
+            logger.debug("Recording process stopped")
 
 class PlaybackThread(QThread):
     finished_signal = pyqtSignal()
@@ -228,6 +233,7 @@ class PlaybackThread(QThread):
 class RecorderDialog(QDialog):
     def __init__(self, parent, tab_dir):
         super().__init__(parent)
+        self.parent = parent
         self.tab_dir = tab_dir
         self.recording_file = None
         self.recording_thread = None
@@ -235,6 +241,9 @@ class RecorderDialog(QDialog):
         self.is_recording = False
         self.is_playing = False
         self.recorded_seconds = 0
+        self.temp_file = None
+        
+        logger.debug(f"Opening RecorderDialog for tab directory: {tab_dir}")
         
         # Set window properties
         self.setWindowTitle("Record Sound")

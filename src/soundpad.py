@@ -19,10 +19,13 @@ from src.utils.file_utils import (
     save_json, load_json, get_app_settings_path
 )
 from src.tabpage import TabPage
+from src.utils.logger import logger
 
 class SoundPad(QWidget):
     def __init__(self):
         super().__init__()
+        
+        logger.info("Initializing SoundPad main application")
         
         # Set window properties
         self.setWindowTitle(f"{APP_NAME} v{APP_VERSION} - {detect_system()}")
@@ -33,12 +36,15 @@ class SoundPad(QWidget):
         self.currently_playing = {}  # {channel: (tab_name, sound_index)}
         
         # Setup UI
+        logger.debug("Setting up user interface")
         self.init_ui()
         
         # Load tabs
+        logger.info("Loading saved tabs")
         self.load_tabs()
         
         # Load volume setting
+        logger.debug("Loading volume settings")
         self.load_volume_setting()
         
         # Start playback checking timer
@@ -48,6 +54,7 @@ class SoundPad(QWidget):
         
         # Add a pygame event handler for sound end events
         pygame.event.set_allowed(SOUND_END_EVENT)
+        logger.debug("SoundPad initialization complete")
     
     def init_ui(self):
         # Main layout
@@ -232,108 +239,125 @@ class SoundPad(QWidget):
     
     def set_volume(self, value):
         # Set volume for pygame mixer (0.0 to 1.0)
-        pygame.mixer.music.set_volume(value / 100)
-        
-        # Set volume for all channels
+        volume = value / 100.0
+        pygame.mixer.music.set_volume(volume)
         for i in range(pygame.mixer.get_num_channels()):
-            if pygame.mixer.Channel(i).get_busy():
-                pygame.mixer.Channel(i).set_volume(value / 100)
+            pygame.mixer.Channel(i).set_volume(volume)
         
-        # Update the label
-        self.volume_value_label.setText(f"{value}%")
+        # Update waveform visualizer volume
+        self.waveform.set_volume_multiplier(volume)
         
         # Save the volume setting
         self.save_volume_setting(value)
+        logger.debug(f"Volume set to {value}%")
     
     def save_volume_setting(self, volume):
         # Get settings path
         settings_path = get_app_settings_path()
         
-        # Load existing settings or create new
-        settings = load_json(settings_path, {"volume": volume})
+        # Load existing settings or create new ones
+        if os.path.exists(settings_path):
+            settings = load_json(settings_path)
+        else:
+            settings = {}
         
-        # Update volume
-        settings["volume"] = volume
-        
-        # Save settings
+        # Update volume setting
+        settings['volume'] = volume
         save_json(settings_path, settings)
+        logger.debug(f"Volume setting saved: {volume}%")
     
     def load_volume_setting(self):
         # Default volume
-        default_volume = 80
+        volume = 100
         
         # Get settings path
         settings_path = get_app_settings_path()
         
-        # Load settings
-        settings = load_json(settings_path)
+        # Load settings if they exist
+        if os.path.exists(settings_path):
+            settings = load_json(settings_path)
+            if 'volume' in settings:
+                volume = settings['volume']
+                logger.debug(f"Loaded volume setting: {volume}%")
         
-        # Get volume value
-        volume = settings.get("volume", default_volume)
-        
-        # Set volume slider
+        # Set the volume slider and apply the volume
         self.volume_slider.setValue(volume)
     
     def load_tabs(self):
         # Clear existing tabs
-        self.tab_widget.clear()
+        logger.debug("Clearing existing tabs")
+        while self.tab_widget.count() > 0:
+            self.tab_widget.removeTab(0)
         
-        # Get sounds directory
-        sounds_dir = get_sounds_dir()
+        # Get the tabs directory
+        tabs_dir = get_tab_dir()
         
-        # If sounds directory doesn't exist, create it
-        if not os.path.exists(sounds_dir):
-            os.makedirs(sounds_dir, exist_ok=True)
+        # Ensure the tabs directory exists
+        if not os.path.exists(tabs_dir):
+            os.makedirs(tabs_dir)
+            logger.info(f"Created tabs directory: {tabs_dir}")
         
-        # Get all subdirectories in the sounds directory
-        tab_dirs = [d for d in os.listdir(sounds_dir) if os.path.isdir(os.path.join(sounds_dir, d))]
+        # Get all subdirectories in the tabs directory (each is a tab)
+        tab_dirs = [d for d in os.listdir(tabs_dir) if os.path.isdir(os.path.join(tabs_dir, d))]
         
-        # Add a default tab if none exist
+        # If no tabs exist, create a default one
         if not tab_dirs:
+            logger.info("No tabs found, creating default tab")
             self.add_tab("Default", prompt=False)
         else:
-            # Add each tab
+            # Load each tab
             for tab_name in sorted(tab_dirs):
+                logger.debug(f"Loading tab: {tab_name}")
                 tab_page = TabPage(tab_name, self)
                 self.tab_widget.addTab(tab_page, tab_name)
-                tab_page.load_sounds()
+            
+            # Set the current tab to the saved index or 0
+            settings_path = get_app_settings_path()
+            if os.path.exists(settings_path):
+                settings = load_json(settings_path)
+                if 'current_tab' in settings and settings['current_tab'] < len(tab_dirs):
+                    self.tab_widget.setCurrentIndex(settings['current_tab'])
+                    logger.debug(f"Set current tab to saved index: {settings['current_tab']}")
     
     def add_tab(self, name=None, prompt=True):
         if prompt:
-            # Prompt user for tab name
-            tab_name, ok = QInputDialog.getText(
-                self, "Add Tab", "Enter tab name:"
-            )
-            if not ok or not tab_name:
+            # Prompt for tab name
+            name, ok = QInputDialog.getText(self, 
+                                          "New Tab", 
+                                          "Enter a name for the new tab:")
+            if not ok or not name:
                 return
-        else:
-            tab_name = name
         
-        # Create safe name
-        tab_name = "".join([c for c in tab_name if c.isalpha() or c.isdigit() or c.isspace()]).strip()
-        if not tab_name:
-            return
-        
-        # Check if tab with this name already exists
-        for i in range(self.tab_widget.count()):
-            if self.tab_widget.tabText(i) == tab_name:
-                QMessageBox.warning(self, "Duplicate Tab", f"A tab named '{tab_name}' already exists.")
-                return
+        # Ensure name is valid for a directory
+        name = name.replace('/', '_').replace('\\', '_').strip()
+        if not name:
+            name = "New Tab"
         
         # Create tab directory
-        tab_dir = get_tab_dir(tab_name)
+        tab_dir = os.path.join(get_tab_dir(), name)
+        if os.path.exists(tab_dir):
+            # Tab already exists
+            QMessageBox.warning(self, "Tab Exists", 
+                              f"A tab named '{name}' already exists.")
+            logger.warning(f"Attempted to create tab that already exists: {name}")
+            return
         
-        # Create and add the tab
-        tab_page = TabPage(tab_name, self)
-        index = self.tab_widget.addTab(tab_page, tab_name)
+        # Create the directory
+        os.makedirs(tab_dir)
         
-        # Select the new tab
+        # Create the tab page
+        tab_page = TabPage(name, self)
+        
+        # Add the tab to the tab widget
+        index = self.tab_widget.addTab(tab_page, name)
         self.tab_widget.setCurrentIndex(index)
+        
+        logger.info(f"Created new tab: {name}")
     
     def rename_tab(self):
         # Get current tab index
         index = self.tab_widget.currentIndex()
-        if index < 0:
+        if index == -1:
             return
         
         # Get current tab name
@@ -341,347 +365,289 @@ class SoundPad(QWidget):
         
         # Prompt for new name
         new_name, ok = QInputDialog.getText(
-            self, "Rename Tab", "Enter new tab name:", text=old_name
+            self, "Rename Tab", 
+            "Enter a new name for this tab:", 
+            text=old_name
         )
+        
         if not ok or not new_name or new_name == old_name:
             return
         
-        # Create safe name
-        new_name = "".join([c for c in new_name if c.isalpha() or c.isdigit() or c.isspace()]).strip()
+        # Ensure name is valid for a directory
+        new_name = new_name.replace('/', '_').replace('\\', '_').strip()
         if not new_name:
             return
         
-        # Check if tab with this name already exists
-        for i in range(self.tab_widget.count()):
-            if i != index and self.tab_widget.tabText(i) == new_name:
-                QMessageBox.warning(self, "Duplicate Tab", f"A tab named '{new_name}' already exists.")
-                return
+        # Check if a tab with this name already exists
+        tab_dir = os.path.join(get_tab_dir(), new_name)
+        if os.path.exists(tab_dir):
+            QMessageBox.warning(self, "Tab Exists", 
+                              f"A tab named '{new_name}' already exists.")
+            logger.warning(f"Attempted to rename tab to existing name: {new_name}")
+            return
         
-        # Get old and new directories
-        old_dir = get_tab_dir(old_name)
-        new_dir = os.path.join(get_sounds_dir(), new_name)
-        
+        # Rename the directory
+        old_dir = os.path.join(get_tab_dir(), old_name)
         try:
-            # Rename the directory
-            if os.path.exists(old_dir):
-                os.rename(old_dir, new_dir)
-            else:
-                os.makedirs(new_dir, exist_ok=True)
+            os.rename(old_dir, tab_dir)
             
-            # Rename the tab in the UI
+            # Update the tab widget
             self.tab_widget.setTabText(index, new_name)
             
-            # Get the tab page and update its name
-            tab_page = self.tab_widget.widget(index)
-            if isinstance(tab_page, TabPage):
+            # Update the tab page
+            tab_page = self.tab_widget.currentWidget()
+            if tab_page:
                 tab_page.tab_name = new_name
                 
-                # Reload the sound list
-                tab_page.load_sounds()
-            
+            logger.info(f"Renamed tab from '{old_name}' to '{new_name}'")
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to rename tab: {str(e)}")
+            QMessageBox.critical(self, "Rename Failed", 
+                               f"Failed to rename tab: {str(e)}")
+            logger.error(f"Failed to rename tab from '{old_name}' to '{new_name}': {str(e)}")
     
     def delete_tab(self):
         # Get current tab index
         index = self.tab_widget.currentIndex()
-        if index < 0:
+        if index == -1:
             return
         
-        # Get current tab name
+        # Get tab name
         tab_name = self.tab_widget.tabText(index)
         
         # Confirm deletion
-        reply = QMessageBox.question(
-            self, "Confirm Delete",
+        result = QMessageBox.question(
+            self, "Confirm Delete", 
             f"Are you sure you want to delete the tab '{tab_name}' and all its sounds?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         
-        if reply != QMessageBox.StandardButton.Yes:
+        if result != QMessageBox.StandardButton.Yes:
             return
         
-        # Stop any playing sounds from this tab
+        # Stop any sounds from this tab
         self.stop_sounds_from_tab(tab_name)
         
-        # Remove the tab from the UI
+        # Remove the tab
         self.tab_widget.removeTab(index)
         
-        # Ask if user wants to delete the directory too
-        reply = QMessageBox.question(
-            self, "Delete Files",
-            f"Do you also want to delete all sound files from '{tab_name}'?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
-        )
+        # Delete the tab directory
+        tab_dir = os.path.join(get_tab_dir(), tab_name)
+        try:
+            import shutil
+            shutil.rmtree(tab_dir)
+            logger.info(f"Deleted tab: {tab_name}")
+        except Exception as e:
+            QMessageBox.critical(self, "Delete Failed", 
+                               f"Failed to delete tab directory: {str(e)}")
+            logger.error(f"Failed to delete tab directory for '{tab_name}': {str(e)}")
+            return
         
-        if reply == QMessageBox.StandardButton.Yes:
-            try:
-                # Get tab directory
-                tab_dir = get_tab_dir(tab_name)
-                
-                # Delete the directory and all its contents
-                import shutil
-                if os.path.exists(tab_dir):
-                    shutil.rmtree(tab_dir)
-            except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to delete tab directory: {str(e)}")
-        
-        # If no tabs left, add a default one
+        # If no tabs left, create a default one
         if self.tab_widget.count() == 0:
             self.add_tab("Default", prompt=False)
+            logger.info("Created new default tab after deleting the last tab")
     
     def stop_sounds_from_tab(self, tab_name):
         # Find all channels playing sounds from this tab
         channels_to_stop = []
-        for channel, (t_name, _) in self.currently_playing.items():
-            if t_name == tab_name:
+        for channel, (playing_tab, _) in self.currently_playing.items():
+            if playing_tab == tab_name:
                 channels_to_stop.append(channel)
         
-        # Stop the channels
+        # Stop the sounds
         for channel in channels_to_stop:
-            if pygame.mixer.Channel(channel).get_busy():
-                pygame.mixer.Channel(channel).stop()
-            
             if channel in self.currently_playing:
+                channel.stop()
                 del self.currently_playing[channel]
+                
+        logger.debug(f"Stopped {len(channels_to_stop)} sounds from tab: {tab_name}")
     
     def toggle_sound(self, tab_name, index):
         # Get a free channel for this sound
-        channel = pygame.mixer.find_channel()
-        if not channel:
-            QMessageBox.warning(self, "No Channels", "No free channels available! Stop some sounds first.")
-            return
-        
-        # Find the channel number directly
-        # In pygame, find_channel() returns one of the Channel objects
-        # We can iterate through channels until we find one that's not busy
-        # and that should be the one returned by find_channel()
-        channel_num = 0  # Default to first channel if nothing else works
-        num_channels = pygame.mixer.get_num_channels()
-        
-        # Try direct comparison first
-        for i in range(num_channels):
-            ch = pygame.mixer.Channel(i)
-            if ch == channel:
-                channel_num = i
-                break
-        else:
-            # Fallback: Find first non-busy channel if direct comparison failed
-            for i in range(num_channels):
-                ch = pygame.mixer.Channel(i)
-                if not ch.get_busy() and i not in self.currently_playing:
-                    channel_num = i
-                    break
-            else:
-                # If we still can't find it, use the first available channel
-                for i in range(num_channels):
-                    if i not in self.currently_playing:
-                        channel_num = i
-                        break
-        
-        # Check if this sound is already playing
-        is_playing = False
-        for ch, (t_name, idx) in list(self.currently_playing.items()):
-            if t_name == tab_name and idx == index:
-                # Sound is already playing, stop it
-                try:
-                    if 0 <= ch < pygame.mixer.get_num_channels():  # Ensure channel index is valid
-                        pygame.mixer.Channel(ch).stop()
-                    del self.currently_playing[ch]
-                    is_playing = True
-                except Exception as e:
-                    print(f"Error stopping channel {ch}: {str(e)}")
-                
-                # Update UI state
-                self.waveform.set_playing(len(self.currently_playing) > 0)
-                
-                # Update the button state
-                tab_index = -1
-                for i in range(self.tab_widget.count()):
-                    if self.tab_widget.tabText(i) == tab_name:
-                        tab_index = i
-                        break
-                
-                if tab_index >= 0:
-                    tab_page = self.tab_widget.widget(tab_index)
-                    if isinstance(tab_page, TabPage):
-                        tab_page.update_button_playing_state(index, False)
-                
-                return
-        
-        # If the sound is not already playing, play it
-        
-        # Get the tab page to find the sound path
-        tab_index = -1
-        for i in range(self.tab_widget.count()):
-            if self.tab_widget.tabText(i) == tab_name:
-                tab_index = i
-                break
-        
-        if tab_index < 0:
-            return
-        
-        tab_page = self.tab_widget.widget(tab_index)
-        if not isinstance(tab_page, TabPage) or index >= len(tab_page.sounds):
-            return
-        
-        # Get sound data
-        sound_data = tab_page.sounds[index]
-        sound_path = sound_data['path']
-        
         try:
+            # Check if this sound is already playing
+            for channel, (playing_tab, playing_index) in list(self.currently_playing.items()):
+                if playing_tab == tab_name and playing_index == index:
+                    # Stop the sound
+                    channel.stop()
+                    del self.currently_playing[channel]
+                    logger.debug(f"Stopped sound {index} in tab '{tab_name}'")
+                    return
+            
+            # Sound is not playing, so play it
+            # Get the TabPage for this tab
+            tab_page = None
+            for i in range(self.tab_widget.count()):
+                if self.tab_widget.tabText(i) == tab_name:
+                    tab_page = self.tab_widget.widget(i)
+                    break
+            
+            if not tab_page:
+                logger.error(f"Could not find tab page for '{tab_name}'")
+                return
+            
+            # Get the sound data
+            sound_data = tab_page.get_sound_data(index)
+            if not sound_data:
+                logger.warning(f"No sound data found for index {index} in tab '{tab_name}'")
+                return
+            
+            sound_path = sound_data.get('path', '')
+            if not sound_path or not os.path.exists(sound_path):
+                logger.error(f"Sound file not found: {sound_path}")
+                return
+            
+            # Get a free channel
+            channel = pygame.mixer.find_channel()
+            if not channel:
+                # No free channels, stop the oldest sound
+                oldest_channel = None
+                oldest_time = float('inf')
+                for ch, _ in self.currently_playing.items():
+                    if ch.get_sound() and ch.get_busy():
+                        sound_pos = ch.get_pos() / 1000.0  # Convert to seconds
+                        sound_length = ch.get_sound().get_length()
+                        time_left = sound_length - sound_pos
+                        if time_left < oldest_time:
+                            oldest_time = time_left
+                            oldest_channel = ch
+                
+                if oldest_channel:
+                    oldest_channel.stop()
+                    del self.currently_playing[oldest_channel]
+                    channel = oldest_channel
+                    logger.debug("Stopped oldest sound to free up a channel")
+                else:
+                    logger.warning("No channels available to play sound")
+                    return
+            
             # Load and play the sound
-            sound = pygame.mixer.Sound(sound_path)
-            channel.play(sound)
-            
-            # Set the end event
-            channel.set_endevent(SOUND_END_EVENT)
-            
-            # Apply current volume
-            volume = self.volume_slider.value() / 100
-            channel.set_volume(volume)
-            
-            # Save the playing sound info
-            self.currently_playing[channel_num] = (tab_name, index)
-            
-            # Update the waveform state
-            self.waveform.set_playing(True)
-            
-            # Update the button state
-            tab_page.update_button_playing_state(index, True)
-            
+            try:
+                sound = pygame.mixer.Sound(sound_path)
+                
+                # Get the volume
+                volume = self.volume_slider.value() / 100.0
+                
+                # Set the volume for this channel
+                channel.set_volume(volume)
+                
+                # Play the sound
+                channel.play(sound)
+                
+                # Store the playing sound
+                self.currently_playing[channel] = (tab_name, index)
+                
+                logger.debug(f"Playing sound {index} from tab '{tab_name}': {os.path.basename(sound_path)}")
+                
+                # Set the channel's endevent
+                channel.set_endevent(SOUND_END_EVENT)
+                
+                # Update the tab page button to show it's playing
+                tab_page.set_button_playing_state(index, True)
+                
+            except Exception as e:
+                logger.error(f"Error playing sound {index} from tab '{tab_name}': {str(e)}")
+                QMessageBox.critical(self, "Playback Error", 
+                                   f"Failed to play sound: {str(e)}")
+        
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to play sound: {str(e)}")
+            logger.error(f"Error in toggle_sound: {str(e)}", exc_info=True)
     
     def check_sound_status(self):
         # Check for sound end events
-        for event in pygame.event.get():
-            if event.type == SOUND_END_EVENT:
-                # A sound has ended on a channel
-                # Find which channel
-                for channel, (tab_name, index) in list(self.currently_playing.items()):
-                    if not pygame.mixer.Channel(channel).get_busy():
-                        # Sound has ended, update UI
-                        
-                        # Update tab button state
-                        tab_index = -1
-                        for i in range(self.tab_widget.count()):
-                            if self.tab_widget.tabText(i) == tab_name:
-                                tab_index = i
-                                break
-                        
-                        if tab_index >= 0:
-                            tab_page = self.tab_widget.widget(tab_index)
-                            if isinstance(tab_page, TabPage):
-                                tab_page.update_button_playing_state(index, False)
-                        
-                        # Remove from currently playing
-                        del self.currently_playing[channel]
+        for event in pygame.event.get(SOUND_END_EVENT):
+            # Find the channel that ended
+            for channel, (tab_name, index) in list(self.currently_playing.items()):
+                if not channel.get_busy():
+                    # Sound has ended
+                    del self.currently_playing[channel]
+                    
+                    # Update the tab page button to show it's not playing
+                    for i in range(self.tab_widget.count()):
+                        if self.tab_widget.tabText(i) == tab_name:
+                            tab_page = self.tab_widget.widget(i)
+                            tab_page.set_button_playing_state(index, False)
+                            logger.debug(f"Sound {index} in tab '{tab_name}' finished playing")
+                            break
         
-        # Update waveform state if no sounds are playing
-        if not self.currently_playing:
-            self.waveform.set_playing(False)
+        # Update waveform visualizer
+        if pygame.mixer.get_busy():
+            self.waveform.update_waveform()
+        else:
+            self.waveform.clear_waveform()
     
     def stop_all_sounds(self):
+        logger.debug("Stopping all sounds")
         # Stop all currently playing sounds
         for channel, (tab_name, index) in list(self.currently_playing.items()):
-            # Stop the sound
-            pygame.mixer.Channel(channel).stop()
-            
-            # Update the button state
-            tab_index = -1
-            for i in range(self.tab_widget.count()):
-                if self.tab_widget.tabText(i) == tab_name:
-                    tab_index = i
-                    break
-            
-            if tab_index >= 0:
-                tab_page = self.tab_widget.widget(tab_index)
-                if isinstance(tab_page, TabPage):
-                    tab_page.update_button_playing_state(index, False)
+            if channel.get_busy():
+                channel.stop()
+                
+                # Update the tab page button to show it's not playing
+                for i in range(self.tab_widget.count()):
+                    if self.tab_widget.tabText(i) == tab_name:
+                        tab_page = self.tab_widget.widget(i)
+                        tab_page.set_button_playing_state(index, False)
+                        break
         
-        # Clear the currently playing dict
+        # Clear the currently playing dictionary
         self.currently_playing.clear()
         
-        # Update waveform state
-        self.waveform.set_playing(False)
+        # Clear the waveform
+        self.waveform.clear_waveform()
     
     def on_tab_changed(self, index):
         # Save the current tab index
         self.current_tab_index = index
+        settings_path = get_app_settings_path()
+        settings = load_json(settings_path) if os.path.exists(settings_path) else {}
+        settings['current_tab'] = index
+        save_json(settings_path, settings)
+        logger.debug(f"Changed to tab index {index}")
     
     def keyPressEvent(self, event):
         # Handle spacebar to stop all sounds
         if event.key() == Qt.Key.Key_Space:
             self.stop_all_sounds()
-            return
         
-        # Handle number keys to trigger sounds
-        if Qt.Key.Key_1 <= event.key() <= Qt.Key.Key_9:
-            shortcut_idx = event.key() - Qt.Key.Key_1  # 0-8 for keys 1-9
+        # Handle number keys 1-9 to trigger sounds
+        elif Qt.Key.Key_1 <= event.key() <= Qt.Key.Key_9:
+            shortcut_idx = event.key() - Qt.Key.Key_1  # Convert to 0-based index
             self.play_sound_by_shortcut(shortcut_idx)
-            return
         
-        # Handle F1-F12 keys
-        if Qt.Key.Key_F1 <= event.key() <= Qt.Key.Key_F12:
-            f_idx = event.key() - Qt.Key.Key_F1  # 0-11 for keys F1-F12
-            self.play_sound_by_shortcut(f_idx + 9)  # 9-20 for keys F1-F12
-            return
-        
-        # Pass to parent handler
-        super().keyPressEvent(event)
+        # Let parent class handle other keys
+        else:
+            super().keyPressEvent(event)
     
     def play_sound_by_shortcut(self, shortcut_idx):
         # Get current tab
-        current_index = self.tab_widget.currentIndex()
-        if current_index < 0:
+        current_tab = self.tab_widget.currentWidget()
+        if not current_tab:
             return
         
-        tab_page = self.tab_widget.widget(current_index)
-        if not isinstance(tab_page, TabPage):
-            return
-        
-        # Check for hotkey assignments
-        tab_name = self.tab_widget.tabText(current_index)
-        favorites_path = os.path.join(get_data_dir(), f"{tab_name}_favorites.json")
-        
-        if os.path.exists(favorites_path):
-            try:
-                with open(favorites_path, 'r') as f:
-                    favorites_data = json.load(f)
-                    
-                    hotkeys = favorites_data.get('hotkeys', {})
-                    hotkey_str = str(shortcut_idx)
-                    
-                    if hotkey_str in hotkeys:
-                        sound_idx = hotkeys[hotkey_str]
-                        # Play the assigned sound
-                        self.toggle_sound(tab_name, sound_idx)
-                        return
-            except:
-                pass
-        
-        # Fallback: Use index directly for 1-9 and F1-F12 keys
-        if shortcut_idx < len(tab_page.sounds):
-            self.toggle_sound(tab_name, shortcut_idx)
+        # Play the sound at the given shortcut index
+        current_tab.play_sound_by_index(shortcut_idx)
+        logger.debug(f"Triggered sound via keyboard shortcut: {shortcut_idx + 1}")
     
     def cleanup(self):
+        logger.info("Performing application cleanup")
         # Stop the check timer
         if hasattr(self, 'check_timer'):
             self.check_timer.stop()
         
-        # Stop all playing sounds
-        pygame.mixer.stop()
+        # Stop all sounds
+        self.stop_all_sounds()
         
-        # Clean up any other resources
-        for i in range(self.tab_widget.count()):
-            tab_page = self.tab_widget.widget(i)
-            if isinstance(tab_page, TabPage):
-                tab_page.cleanup()
+        # Save the current tab index
+        settings_path = get_app_settings_path()
+        settings = load_json(settings_path) if os.path.exists(settings_path) else {}
+        settings['current_tab'] = self.tab_widget.currentIndex()
+        save_json(settings_path, settings)
+        
+        logger.debug("Cleanup completed")
     
     def closeEvent(self, event):
         # Perform cleanup
         self.cleanup()
+        logger.info("Application closing")
         event.accept() 

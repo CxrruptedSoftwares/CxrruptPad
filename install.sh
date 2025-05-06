@@ -159,7 +159,7 @@ else
         echo -e "${RED}✗ Failed to install Python. Please install Python 3.8+ manually and run this script again.${NC}"
         exit 1
     fi
-}
+fi
 
 # Check for pip
 echo -e "\n${BLUE}Checking for pip...${NC}"
@@ -350,4 +350,4 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     "$SCRIPT_DIR/run_cxrruptpad.sh"
 else
     echo -e "\n${CYAN}Enjoy using CxrruptPad!${NC}"
-fi 
+fi

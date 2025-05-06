@@ -8,7 +8,8 @@
     <a href="#installation">Installation</a> •
     <a href="#usage">Usage</a> •
     <a href="#system-requirements">Requirements</a> •
-    <a href="#contributing">Contributing</a>
+    <a href="#contributing">Contributing</a> •
+    <a href="#reporting-issues">Reporting Issues</a>
   </p>
 </div>
 
@@ -147,6 +148,36 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 3. Commit your changes (`git commit -m 'Add some amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+## 🐛 Reporting Issues
+
+If you encounter any problems while using CxrruptPad, please report them to help us improve the application:
+
+1. Check if the issue has already been reported in the [Issues](https://github.com/CxrruptedSoftwares/CxrruptPad/issues) section
+2. If not, create a new issue with the following information:
+   - A clear, descriptive title
+   - Steps to reproduce the bug
+   - Expected behavior vs actual behavior
+   - Screenshots if applicable
+   - Error messages from the latest.log file
+
+### Logging System
+
+CxrruptPad includes a comprehensive logging system that records application activities:
+
+- All application events are automatically logged to a `latest.log` file
+- Log files are stored in the `logs` directory within the application folder
+- Each session creates a new log with timestamp information
+- When reporting issues, please attach the relevant log file to help with debugging
+
+To access logs:
+```bash
+# On Windows
+cd %APPDATA%\CxrruptPad\logs
+
+# On Linux
+cd ~/.config/CxrruptPad/logs
+```
 
 ## 📜 License
 

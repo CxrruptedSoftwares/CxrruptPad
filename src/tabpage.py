@@ -17,6 +17,7 @@ from src.utils.file_utils import (
     get_tab_dir, get_tab_favorites_path, save_json, load_json,
     create_safe_filename, delete_file_safely, move_file_safely
 )
+from src.utils.logger import logger
 
 class TabPage(QWidget):
     def __init__(self, tab_name, parent=None):
@@ -28,6 +29,8 @@ class TabPage(QWidget):
         self.sound_buttons_layout = None
         self.favorites = {}
         self.hotkeys = {}
+        
+        logger.debug(f"Initializing TabPage for tab: {tab_name}")
         
         # Initialize UI
         self.init_ui()
@@ -181,6 +184,7 @@ class TabPage(QWidget):
         
         # Update status
         self.status_label.setText("Loading sounds...")
+        logger.info(f"Loading sounds for tab: {self.tab_name}")
         
         # Start thread to load sounds
         self.load_thread = LoadSoundsThread(self.tab_name)
@@ -203,15 +207,14 @@ class TabPage(QWidget):
         # Set sounds list
         self.sounds = sounds
         
-        if not success:
-            self.status_label.setText("Error loading sounds")
-            return
-        
-        # Create sound buttons
-        self.create_sound_buttons()
-        
-        # Update status
-        self.status_label.setText(f"Loaded {len(self.sounds)} sounds")
+        if success:
+            # Create buttons for sounds
+            self.create_sound_buttons()
+            self.status_label.setText(f"Loaded {len(sounds)} sounds")
+            logger.info(f"Successfully loaded {len(sounds)} sounds for tab: {self.tab_name}")
+        else:
+            self.status_label.setText("Failed to load sounds")
+            logger.error(f"Failed to load sounds for tab: {self.tab_name}")
     
     def create_sound_buttons(self):
         # Clear existing buttons
@@ -262,8 +265,9 @@ class TabPage(QWidget):
     
     def toggle_sound(self, index):
         # Call the parent's toggle sound method
-        if self.parent and hasattr(self.parent, 'toggle_sound'):
+        if index < len(self.sounds):
             self.parent.toggle_sound(self.tab_name, index)
+            logger.debug(f"Toggle sound at index {index} in tab: {self.tab_name}")
     
     def update_button_playing_state(self, index, is_playing):
         # Update button state
@@ -272,8 +276,8 @@ class TabPage(QWidget):
     
     def stop_all_sounds(self):
         # Tell parent to stop all sounds
-        if self.parent and hasattr(self.parent, 'stop_all_sounds'):
-            self.parent.stop_all_sounds()
+        self.parent.stop_all_sounds()
+        logger.debug(f"Stopping all sounds from tab: {self.tab_name}")
     
     def show_add_sound_menu(self):
         # Create context menu
@@ -293,52 +297,51 @@ class TabPage(QWidget):
     
     def add_sound_file(self):
         # Show file open dialog
-        file_paths, _ = QFileDialog.getOpenFileNames(
+        files, _ = QFileDialog.getOpenFileNames(
             self,
             "Select Sound Files",
             "",
-            "Sound Files (*.mp3 *.wav *.ogg);;All Files (*.*)"
+            "Sound Files (*.mp3 *.wav *.ogg);;All Files (*)"
         )
         
-        if not file_paths:
+        if not files:
             return
+        
+        logger.info(f"Adding {len(files)} sound files to tab: {self.tab_name}")
         
         # Get tab directory
         tab_dir = get_tab_dir(self.tab_name)
+        if not os.path.exists(tab_dir):
+            os.makedirs(tab_dir)
         
         # Copy files to tab directory
-        for src_path in file_paths:
+        success_count = 0
+        for file_path in files:
             try:
-                # Get file name
-                file_name = os.path.basename(src_path)
+                # Get original filename
+                original_filename = os.path.basename(file_path)
                 
-                # Create destination path
-                dst_path = os.path.join(tab_dir, file_name)
+                # Create a safe filename
+                safe_filename = create_safe_filename(original_filename)
                 
-                # Check if file already exists
-                if os.path.exists(dst_path):
-                    # Ask to overwrite
-                    reply = QMessageBox.question(
-                        self,
-                        "File Exists",
-                        f"A file named '{file_name}' already exists. Overwrite?",
-                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                        QMessageBox.StandardButton.No
-                    )
-                    
-                    if reply != QMessageBox.StandardButton.Yes:
-                        continue
+                # Copy file to tab directory
+                dest_path = os.path.join(tab_dir, safe_filename)
                 
-                # Copy file
-                with open(src_path, 'rb') as src_file:
-                    with open(dst_path, 'wb') as dst_file:
-                        dst_file.write(src_file.read())
+                move_file_safely(file_path, dest_path, copy=True)
+                success_count += 1
+                logger.debug(f"Added sound file: {safe_filename} to tab: {self.tab_name}")
                 
             except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to copy file: {str(e)}")
+                logger.error(f"Error adding sound file {file_path}: {str(e)}")
+                QMessageBox.critical(self,
+                                   "Error Adding Sound",
+                                   f"Failed to add {os.path.basename(file_path)}: {str(e)}")
         
-        # Reload sounds
-        self.load_sounds()
+        if success_count > 0:
+            # Reload sounds
+            self.load_sounds()
+            self.status_label.setText(f"Added {success_count} sound(s)")
+            logger.info(f"Successfully added {success_count} sounds to tab: {self.tab_name}")
     
     def add_sound_folder(self):
         # Show folder select dialog
@@ -630,38 +633,54 @@ class TabPage(QWidget):
             QMessageBox.critical(self, "Error", f"Failed to rename sound: {str(e)}")
     
     def delete_sound(self, index):
-        if index < 0 or index >= len(self.sounds):
-            return
-        
-        # Get sound data
-        sound_data = self.sounds[index]
-        sound_name = sound_data['name']
-        
         # Confirm deletion
-        reply = QMessageBox.question(
+        sound_data = self.sounds[index]
+        sound_name = sound_data.get('name', 'Unknown')
+        sound_path = sound_data.get('path', '')
+        
+        result = QMessageBox.question(
             self,
             "Confirm Delete",
-            f"Are you sure you want to delete '{sound_name}'?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
+            f"Are you sure you want to delete the sound '{sound_name}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         
-        if reply != QMessageBox.StandardButton.Yes:
+        if result != QMessageBox.StandardButton.Yes:
             return
         
-        # Get file path
-        file_path = sound_data['path']
+        # Remove sound from favorites and hotkeys if present
+        self.remove_from_favorites(index)
+        self.clear_hotkey(index)
         
-        # Delete file
-        if delete_file_safely(file_path):
-            # Remove from favorites and hotkeys
-            self.remove_from_favorites(index)
-            self.clear_hotkey(index)
-            
-            # Reload sounds
-            self.load_sounds()
-        else:
-            QMessageBox.critical(self, "Error", f"Failed to delete '{sound_name}'.")
+        # Stop the sound if it's playing
+        for channel, (tab_name, sound_index) in list(self.parent.currently_playing.items()):
+            if tab_name == self.tab_name and sound_index == index:
+                channel.stop()
+                del self.parent.currently_playing[channel]
+                break
+        
+        # Delete the sound file
+        try:
+            if sound_path and os.path.exists(sound_path):
+                delete_file_safely(sound_path)
+                logger.info(f"Deleted sound file: {sound_name} from tab: {self.tab_name}")
+                
+                # Reload sounds
+                self.load_sounds()
+                self.status_label.setText(f"Deleted sound: {sound_name}")
+            else:
+                logger.warning(f"Sound file not found for deletion: {sound_path}")
+                QMessageBox.warning(self,
+                                  "File Not Found",
+                                  f"Could not find the sound file to delete.")
+                
+                # Reload sounds to remove it from the list
+                self.load_sounds()
+        except Exception as e:
+            logger.error(f"Error deleting sound file {sound_path}: {str(e)}")
+            QMessageBox.critical(self,
+                               "Delete Error",
+                               f"Failed to delete sound: {str(e)}")
     
     def load_favorites(self):
         # Get favorites file path
@@ -763,4 +782,5 @@ class TabPage(QWidget):
         # Stop any loading thread
         if hasattr(self, 'load_thread') and self.load_thread.isRunning():
             self.load_thread.terminate()
-            self.load_thread.wait() 
+            self.load_thread.wait()
+            logger.debug(f"Stopped loading thread for tab: {self.tab_name}")

@@ -254,6 +254,19 @@ class WaveformVisualizer(QWidget):
         
         self.update()
     
+    def set_volume_multiplier(self, volume_multiplier):
+        """Set the volume multiplier for visualization (0.0 to 1.0)"""
+        # This method might be called from soundpad.py
+        # It affects how the audio level is visualized
+        pass
+    
+    def clear_waveform(self):
+        """Clear the waveform visualization (reset samples)"""
+        self.is_playing = False
+        self.audio_level = 0
+        self.samples = [0.05 for _ in range(self.max_samples)]
+        self.update()
+    
     def update_audio_level(self, level):
         """Update the audio level (0-100) for the waveform"""
         self.audio_level = level

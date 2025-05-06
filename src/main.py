@@ -16,14 +16,18 @@ from src.ui.components import LogoWidget
 from src.soundpad import SoundPad
 from src.dependencies.dependency_checker import DependencyChecker
 from src.audio.audio_utils import initialize_audio
+# Import our logger
+from src.utils.logger import logger
 
 def main():
+    logger.info("Starting CxrruptPad application")
     app = QApplication(sys.argv)
     set_dark_palette(app)
     app.setStyle("Fusion")
     
     try:
         # Create a fancy splash screen
+        logger.debug("Creating splash screen")
         splash = QWidget()
         splash.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
         splash.setFixedSize(450, 250)
@@ -91,10 +95,12 @@ def main():
         splash.move(x, y)
         
         # Show the splash screen
+        logger.debug("Displaying splash screen")
         splash.show()
         app.processEvents()
         
         # Check dependencies
+        logger.info("Checking for required dependencies")
         dependency_checker = DependencyChecker()
         status_label.setText("Checking for required dependencies...")
         app.processEvents()  # Update UI
@@ -105,44 +111,56 @@ def main():
         # Show dependency status
         missing_deps = dependency_checker.missing_deps
         if missing_deps:
+            logger.warning(f"Missing dependencies: {', '.join(missing_deps)}")
             status_label.setText(f"Missing dependencies: {', '.join(missing_deps)}")
         else:
+            logger.info("All dependencies found")
             status_label.setText("All dependencies found!")
         app.processEvents()
         time.sleep(1)  # Give user time to see the status
         
         # Hide splash screen
+        logger.debug("Hiding splash screen")
         splash.hide()
         
         # If dependencies are missing, show dialog
         if not all_deps_installed:
             # If user chooses not to install or installation fails, still proceed
+            logger.info("Showing dependency installation dialog")
             dependency_checker.show_dependency_dialog()
         
         # Initialize pygame mixer with a sample rate that works well on both Windows and Linux
+        logger.info("Initializing audio system")
         initialize_audio()
         
         # Create and show main window
+        logger.info("Starting main application window")
         window = SoundPad()
         window.show()
         
         # Use a clean exit
+        logger.debug("Entering main application loop")
         exit_code = app.exec()
         
         # Additional cleanup
+        logger.info("Application closing, performing cleanup")
         window.cleanup()
         pygame.quit()
         
+        logger.info(f"Application exited with code: {exit_code}")
         sys.exit(exit_code)
         
     except Exception as e:
+        # Log the exception with full traceback
+        logger.critical(f"Fatal error during startup: {str(e)}", exc_info=True)
+        
         # Show error message if something goes wrong during startup
         from PyQt6.QtWidgets import QMessageBox
         error_dialog = QMessageBox()
         error_dialog.setIcon(QMessageBox.Icon.Critical)
         error_dialog.setWindowTitle("Application Error")
         error_dialog.setText(f"Error starting {APP_NAME}:")
-        error_dialog.setDetailedText(str(e))
+        error_dialog.setDetailedText(f"{str(e)}\n\nPlease check the log file at:\n{os.path.join(logger.handlers[1].baseFilename)}")
         error_dialog.setStandardButtons(QMessageBox.StandardButton.Ok)
         error_dialog.exec()
         sys.exit(1)
