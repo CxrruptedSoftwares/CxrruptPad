@@ -1,7 +1,7 @@
 # CxrruptPad - Modern Audio Soundboard
 
 <div align="center">
-  <img src="https://i.imgur.com/GWY0My5.png" alt="CxrruptPad Screenshot" width="800"/>
+  <img src="https://i.imgur.com/SlJVwAy.png" alt="CxrruptPad Screenshot" width="800"/>
   <p><i>A sleek, feature-rich audio soundboard application built with PyQt6 and pygame</i></p>
   <p>
     <a href="#features">Features</a> •
