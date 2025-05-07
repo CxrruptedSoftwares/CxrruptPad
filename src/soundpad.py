@@ -545,6 +545,9 @@ class SoundPad(QWidget):
                 # Update the tab page button to show it's playing
                 tab_page.set_button_playing_state(index, True)
                 
+                # Set the waveform to playing state
+                self.waveform.set_playing(True)
+                
             except Exception as e:
                 logger.error(f"Error playing sound {index} from tab '{tab_name}': {str(e)}")
                 QMessageBox.critical(self, "Playback Error", 

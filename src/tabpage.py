@@ -4,7 +4,7 @@ import concurrent.futures
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, 
     QPushButton, QLabel, QMessageBox, QMenu, QDialog,
-    QFileDialog, QInputDialog, QGridLayout
+    QFileDialog, QInputDialog, QGridLayout, QProgressBar
 )
 from PyQt6.QtGui import QAction, QIcon, QColor
 from PyQt6.QtCore import Qt, QSize, pyqtSignal
@@ -269,10 +269,20 @@ class TabPage(QWidget):
             self.parent.toggle_sound(self.tab_name, index)
             logger.debug(f"Toggle sound at index {index} in tab: {self.tab_name}")
     
+    def get_sound_data(self, index):
+        # Return sound data at the specified index
+        if 0 <= index < len(self.sounds):
+            return self.sounds[index]
+        return None
+    
     def update_button_playing_state(self, index, is_playing):
         # Update button state
         if 0 <= index < len(self.buttons):
             self.buttons[index].set_playing(is_playing)
+    
+    def set_button_playing_state(self, index, is_playing):
+        # Alias for update_button_playing_state for backward compatibility
+        self.update_button_playing_state(index, is_playing)
     
     def stop_all_sounds(self):
         # Tell parent to stop all sounds
