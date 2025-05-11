@@ -7,6 +7,13 @@ import concurrent.futures
 import wave
 from PyQt6.QtCore import QThread, pyqtSignal
 
+try:
+    from mutagen.mp3 import MP3
+    from mutagen.oggvorbis import OggVorbis
+except ImportError:
+    MP3 = None
+    OggVorbis = None
+
 class LoadSoundsThread(QThread):
     loading_status_signal = pyqtSignal(str)
     loading_progress_signal = pyqtSignal(int)
@@ -91,11 +98,29 @@ class LoadSoundsThread(QThread):
         except:
             creation_time = os.path.getmtime(full_path)
         
+        # Get duration
+        duration = ''
+        try:
+            if filename.lower().endswith('.wav'):
+                with wave.open(full_path, 'rb') as wf:
+                    frames = wf.getnframes()
+                    rate = wf.getframerate()
+                    duration = frames / float(rate)
+            elif filename.lower().endswith('.mp3') and MP3:
+                audio = MP3(full_path)
+                duration = audio.info.length
+            elif filename.lower().endswith('.ogg') and OggVorbis:
+                audio = OggVorbis(full_path)
+                duration = audio.info.length
+        except Exception as e:
+            duration = ''
+        
         # Create sound data object
         sound_data = {
             'path': full_path,
             'name': os.path.splitext(filename)[0],  # Remove extension
-            'creation_time': creation_time
+            'creation_time': creation_time,
+            'duration': duration
         }
         
         return sound_data

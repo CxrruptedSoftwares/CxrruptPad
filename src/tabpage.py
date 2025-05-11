@@ -1,10 +1,13 @@
 import os
 import pygame
 import concurrent.futures
+import subprocess
+import json
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, 
     QPushButton, QLabel, QMessageBox, QMenu, QDialog,
-    QFileDialog, QInputDialog, QGridLayout, QProgressBar
+    QFileDialog, QInputDialog, QGridLayout, QProgressBar,
+    QLineEdit, QTableWidget, QTableWidgetItem, QHeaderView
 )
 from PyQt6.QtGui import QAction, QIcon, QColor
 from PyQt6.QtCore import Qt, QSize, pyqtSignal
@@ -110,6 +113,24 @@ class TabPage(QWidget):
         self.youtube_btn.clicked.connect(self.show_youtube_dialog)
         controls_layout.addWidget(self.youtube_btn)
         
+        # Playlist Download button
+        self.playlist_btn = QPushButton("Playlist Download")
+        self.playlist_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: #FF8800;
+                color: {APP_STYLE['text_color']};
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background: #CC6600;
+            }}
+        """)
+        self.playlist_btn.clicked.connect(self.show_playlist_dialog)
+        controls_layout.addWidget(self.playlist_btn)
+        
         # Stop All button
         self.stop_all_btn = QPushButton("Stop All")
         self.stop_all_btn.setStyleSheet(f"""
@@ -155,28 +176,63 @@ class TabPage(QWidget):
         self.status_label.setStyleSheet(f"color: {APP_STYLE['text_color']}; background: transparent;")
         main_layout.addWidget(self.status_label)
         
-        # Scroll area for sound buttons
-        self.scroll_area = QScrollArea()
-        self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setStyleSheet(f"""
-            QScrollArea {{
-                background: transparent;
+        # Search bar
+        self.search_bar = QLineEdit()
+        self.search_bar.setPlaceholderText("Search sounds...")
+        self.search_bar.setStyleSheet(f"""
+            QLineEdit {{
+                background: #232336;
+                color: {APP_STYLE['text_color']};
                 border: 1px solid {APP_STYLE['primary_color']};
                 border-radius: 8px;
+                padding: 8px 12px;
+                font-size: 15px;
             }}
         """)
+        self.search_bar.textChanged.connect(self.filter_sounds)
+        main_layout.addWidget(self.search_bar)
         
-        # Create container for sound buttons
-        self.sound_buttons_container = QWidget()
-        self.sound_buttons_container.setStyleSheet("background: transparent;")
+        # Table for sound list
+        self.sound_table = QTableWidget(0, 4)
+        self.sound_table.setHorizontalHeaderLabels(["#", "Name", "Duration", "Hotkey"])
+        self.sound_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.sound_table.verticalHeader().setVisible(False)
+        self.sound_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.sound_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.sound_table.setStyleSheet(f"""
+            QTableWidget {{
+                background: #181825;
+                color: {APP_STYLE['text_color']};
+                border: 1px solid {APP_STYLE['primary_color']};
+                border-radius: 8px;
+                font-size: 15px;
+            }}
+            QHeaderView::section {{
+                background: {APP_STYLE['primary_color']};
+                color: {APP_STYLE['text_color']};
+                border: none;
+                border-radius: 8px;
+                font-weight: bold;
+                font-size: 15px;
+            }}
+            QTableWidget::item:selected {{
+                background: {APP_STYLE['secondary_color']};
+                color: {APP_STYLE['text_color']};
+            }}
+        """)
+        main_layout.addWidget(self.sound_table)
         
-        # Grid layout for sound buttons
-        self.sound_buttons_layout = QGridLayout(self.sound_buttons_container)
-        self.sound_buttons_layout.setContentsMargins(10, 10, 10, 10)
-        self.sound_buttons_layout.setSpacing(10)
+        # Connect double-click to play sound
+        self.sound_table.doubleClicked.connect(self.handle_table_double_click)
         
-        self.scroll_area.setWidget(self.sound_buttons_container)
-        main_layout.addWidget(self.scroll_area)
+        # Remove old scroll area and grid layout
+        # (self.scroll_area, self.sound_buttons_container, self.sound_buttons_layout)
+        self.scroll_area = None
+        self.sound_buttons_container = None
+        self.sound_buttons_layout = None
+        
+        # For compatibility, keep self.buttons as a list of None
+        self.buttons = []
     
     def load_sounds(self):
         # Clear existing sound buttons
@@ -217,51 +273,54 @@ class TabPage(QWidget):
             logger.error(f"Failed to load sounds for tab: {self.tab_name}")
     
     def create_sound_buttons(self):
-        # Clear existing buttons
-        self.clear_sound_buttons()
-        
-        # Calculate columns based on container width (approximately)
-        columns = max(3, self.scroll_area.width() // 150)
-        
-        # Create buttons for each sound
+        # Instead of buttons, populate the table
+        self.sound_table.setRowCount(0)
+        self.buttons = []
         for i, sound in enumerate(self.sounds):
-            button = GlowingButton(sound['name'])
-            button.clicked.connect(lambda checked, idx=i: self.toggle_sound(idx))
-            
-            # Set up context menu
-            button.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-            button.customContextMenuRequested.connect(lambda pos, idx=i: self.show_sound_context_menu(pos, idx))
-            
-            # Add button to grid layout
-            row = i // columns
-            col = i % columns
-            self.sound_buttons_layout.addWidget(button, row, col)
-            
-            # Add to buttons list
-            self.buttons.append(button)
-            
-            # Check if sound is a favorite and style accordingly
-            if str(i) in self.favorites:
-                button.setProperty("favorite", True)
-                # Ensure the button shadow is visible
-                button.shadow.setColor(QColor(APP_STYLE['accent_color']))
-            
-            # Look for hotkey assignment
+            self.sound_table.insertRow(i)
+            # Index
+            idx_item = QTableWidgetItem(str(i))
+            idx_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.sound_table.setItem(i, 0, idx_item)
+            # Name
+            name_item = QTableWidgetItem(sound['name'])
+            self.sound_table.setItem(i, 1, name_item)
+            # Duration
+            duration = sound.get('duration', '')
+            duration_str = ''
+            try:
+                if isinstance(duration, (int, float)) and duration:
+                    mins = int(duration) // 60
+                    secs = int(duration) % 60
+                    duration_str = f"{mins}:{secs:02d}"
+                elif isinstance(duration, str) and duration:
+                    # Try to parse as float
+                    d = float(duration)
+                    mins = int(d) // 60
+                    secs = int(d) % 60
+                    duration_str = f"{mins}:{secs:02d}"
+            except:
+                duration_str = ''
+            duration_item = QTableWidgetItem(duration_str)
+            duration_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.sound_table.setItem(i, 2, duration_item)
+            # Hotkey
+            hotkey = ''
             for key, value in self.hotkeys.items():
                 if value == str(i):
                     try:
                         key_num = int(key)
-                        if 0 <= key_num <= 8:  # 1-9 keys
+                        if 0 <= key_num <= 8:
                             hotkey = f"{key_num + 1}"
-                            button.setText(f"{sound['name']} [{hotkey}]")
-                        elif 9 <= key_num <= 20:  # F1-F12 keys
+                        elif 9 <= key_num <= 20:
                             hotkey = f"F{key_num - 8}"
-                            button.setText(f"{sound['name']} [{hotkey}]")
                     except:
                         pass
-        
-        # Update the layout
-        self.sound_buttons_container.updateGeometry()
+            hotkey_item = QTableWidgetItem(hotkey)
+            hotkey_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.sound_table.setItem(i, 3, hotkey_item)
+            self.buttons.append(None)  # For compatibility
+        self.sound_table.resizeRowsToContents()
     
     def toggle_sound(self, index):
         # Call the parent's toggle sound method
@@ -276,13 +335,12 @@ class TabPage(QWidget):
         return None
     
     def update_button_playing_state(self, index, is_playing):
-        # Update button state
-        if 0 <= index < len(self.buttons):
-            self.buttons[index].set_playing(is_playing)
-    
+        # No-op: No buttons to update in table mode
+        pass
+
     def set_button_playing_state(self, index, is_playing):
-        # Alias for update_button_playing_state for backward compatibility
-        self.update_button_playing_state(index, is_playing)
+        # No-op: No buttons to update in table mode
+        pass
     
     def stop_all_sounds(self):
         # Tell parent to stop all sounds
@@ -544,6 +602,125 @@ class TabPage(QWidget):
         progress_dialog.setModal(True)
         progress_dialog.exec()
     
+    def show_playlist_dialog(self):
+        # Prompt for playlist URL
+        url, ok = QInputDialog.getText(
+            self,
+            "Playlist Download",
+            "Enter playlist URL:"
+        )
+        if not ok or not url:
+            return
+
+        # Ask if user wants to add index prefix
+        add_prefix = QMessageBox.question(
+            self,
+            "Add Index Prefix",
+            "Add index prefix to filenames?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes
+        ) == QMessageBox.StandardButton.Yes
+
+        # Get tab directory
+        tab_dir = get_tab_dir(self.tab_name)
+
+        # Fetch playlist info using yt-dlp or youtube-dl
+        playlist_items = []
+        try:
+            cmd = ["yt-dlp", "--flat-playlist", "-J", url]
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            data = json.loads(result.stdout)
+            for entry in data.get("entries", []):
+                # Compose full URL for each entry
+                entry_url = entry.get("url")
+                if entry_url and "youtube.com" not in entry_url:
+                    entry_url = f"https://www.youtube.com/watch?v={entry_url}"
+                playlist_items.append({
+                    'url': entry_url,
+                    'title': entry.get('title', entry_url)
+                })
+        except Exception as e:
+            QMessageBox.critical(self, "Playlist Error", f"Failed to fetch playlist info: {e}")
+            return
+
+        if not playlist_items:
+            QMessageBox.warning(self, "No Items", "No items found in the playlist.")
+            return
+
+        # Show progress dialog
+        progress_dialog = QDialog(self)
+        progress_dialog.setWindowTitle("Downloading Playlist")
+        progress_dialog.setMinimumWidth(400)
+        progress_dialog.setStyleSheet(f"""
+            QDialog {{ background: {APP_STYLE['darker_color']}; }}
+            QLabel {{ color: {APP_STYLE['text_color']}; }}
+            QProgressBar {{
+                border: 1px solid {APP_STYLE['primary_color']};
+                border-radius: 5px;
+                background: #252535;
+                text-align: center;
+            }}
+            QProgressBar::chunk {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                          stop:0 {APP_STYLE['primary_color']},
+                                          stop:1 {APP_STYLE['secondary_color']});
+                border-radius: 4px;
+            }}
+        """)
+        layout = QVBoxLayout(progress_dialog)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(10)
+        status_label = QLabel("Starting playlist download...")
+        layout.addWidget(status_label)
+        progress_bar = QProgressBar()
+        progress_bar.setRange(0, len(playlist_items))
+        progress_bar.setValue(0)
+        layout.addWidget(progress_bar)
+
+        # Start playlist download thread (one at a time)
+        results = []
+        current_idx = [0]
+        total = len(playlist_items)
+        self._playlist_thread = None  # Keep reference to prevent GC
+        failed_songs = []
+
+        def download_next():
+            if current_idx[0] >= total:
+                progress_dialog.accept()
+                msg = "Playlist download finished."
+                if failed_songs:
+                    msg += f"\nFailed to download {len(failed_songs)} song(s):\n" + "\n".join(failed_songs)
+                QMessageBox.information(self, "Download Complete", msg)
+                self.load_sounds()
+                return
+            item = playlist_items[current_idx[0]]
+            status_label.setText(f"Downloading {current_idx[0]+1}/{total}: {item['title']}")
+            thread = PlaylistDownloadThread([item], tab_dir, add_prefix)
+            self._playlist_thread = thread
+            def on_finished(res):
+                results.extend(res)
+                progress_bar.setValue(current_idx[0]+1)
+                current_idx[0] += 1
+                download_next()
+            def on_error(idx, title, msg):
+                failed_songs.append(item['title'])
+                progress_bar.setValue(current_idx[0]+1)
+                current_idx[0] += 1
+                download_next()
+            thread.finished_signal.connect(on_finished)
+            thread.error_signal.connect(on_error)
+            thread.start()
+        download_next()
+
+        # Ensure thread is stopped/waited for if dialog is closed
+        def on_close(event):
+            if self._playlist_thread and self._playlist_thread.isRunning():
+                self._playlist_thread.wait(2000)  # Wait up to 2 seconds
+            event.accept()
+        progress_dialog.closeEvent = on_close
+        progress_dialog.setModal(True)
+        progress_dialog.exec()
+    
     def show_sound_context_menu(self, pos, index):
         # Get the button that was right-clicked
         button = self.sender()
@@ -794,3 +971,14 @@ class TabPage(QWidget):
             self.load_thread.terminate()
             self.load_thread.wait()
             logger.debug(f"Stopped loading thread for tab: {self.tab_name}")
+    
+    def filter_sounds(self, text):
+        # Filter the table rows based on the search text
+        for row in range(self.sound_table.rowCount()):
+            name = self.sound_table.item(row, 1).text()
+            self.sound_table.setRowHidden(row, text.lower() not in name.lower())
+    
+    def handle_table_double_click(self, index):
+        # Play the sound at the double-clicked row
+        row = index.row()
+        self.toggle_sound(row)

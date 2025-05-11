@@ -247,6 +247,9 @@ class SoundPad(QWidget):
         # Update waveform visualizer volume
         self.waveform.set_volume_multiplier(volume)
         
+        # Update the volume value label
+        self.volume_value_label.setText(f"{value}%")
+        
         # Save the volume setting
         self.save_volume_setting(value)
         logger.debug(f"Volume set to {value}%")
@@ -310,6 +313,7 @@ class SoundPad(QWidget):
                 logger.debug(f"Loading tab: {tab_name}")
                 tab_page = TabPage(tab_name, self)
                 self.tab_widget.addTab(tab_page, tab_name)
+                tab_page.load_sounds()  # Auto-load sounds for all tabs
             
             # Set the current tab to the saved index or 0
             settings_path = get_app_settings_path()
