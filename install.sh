@@ -42,6 +42,10 @@ detect_package_manager() {
         PKG_MANAGER="zypper"
         PKG_UPDATE="sudo zypper refresh"
         PKG_INSTALL="sudo zypper install -y"
+    elif command -v emerge &>/dev/null; then
+        PKG_MANAGER="emerge"
+        PKG_UPDATE="sudo emerge --sync"
+        PKG_INSTALL="sudo emerge --noreplace"
     elif command -v apk &>/dev/null; then
         PKG_MANAGER="apk"
         PKG_UPDATE="sudo apk update"
@@ -132,6 +136,8 @@ if command -v python3 &>/dev/null; then
                 $PKG_INSTALL python
             elif [ "$PKG_MANAGER" = "zypper" ]; then
                 $PKG_INSTALL python310
+            elif [ "$PKG_MANAGER" = "emerge" ]; then
+                $PKG_INSTALL dev-lang/python:3.10
             elif [ "$PKG_MANAGER" = "apk" ]; then
                 $PKG_INSTALL python3
             fi
@@ -176,6 +182,8 @@ if ! $PYTHON_CMD -m pip --version &>/dev/null; then
         $PKG_INSTALL python-pip
     elif [ "$PKG_MANAGER" = "zypper" ]; then
         $PKG_INSTALL python3-pip
+    elif [ "$PKG_MANAGER" = "emerge" ]; then
+        $PKG_INSTALL dev-python/pip
     elif [ "$PKG_MANAGER" = "apk" ]; then
         $PKG_INSTALL py3-pip
     else
@@ -225,6 +233,8 @@ elif [ "$PKG_MANAGER" = "pacman" ]; then
 elif [ "$PKG_MANAGER" = "zypper" ]; then
     $PKG_INSTALL -t pattern devel_basis
     $PKG_INSTALL portaudio-devel alsa-devel
+elif [ "$PKG_MANAGER" = "emerge" ]; then
+    $PKG_INSTALL sys-devel/gcc media-libs/portaudio media-libs/alsa-lib media-sound/sox
 elif [ "$PKG_MANAGER" = "apk" ]; then
     $PKG_INSTALL build-base portaudio-dev alsa-lib-dev
 fi
